@@ -1,25 +1,25 @@
 {
-  "seq": 4,
+  "seq": 5,
   "findings": [
     {
       "id": "F-0001",
       "title": "Windows git CRLF warnings pollute drydock output (13 lines)",
       "category": "missing",
-      "status": "confirmed",
+      "status": "fixed",
       "detail": "Fix candidate: add .gitattributes (* text=auto eol=lf) to drydock seed. Source: docs/dogfood/log.md Run#1",
       "phase": "drydock",
       "createdAt": "2026-08-29T06:03:51.526Z",
-      "updatedAt": "2026-08-29T06:03:51.530Z"
+      "updatedAt": "2026-08-29T06:06:15.553Z"
     },
     {
       "id": "F-0002",
       "title": "drydock suggests `omc doctor` but is not executable outside an OMC session",
       "category": "protocol",
-      "status": "confirmed",
+      "status": "fixed",
       "detail": "Fix candidate: make OMC detection optional. Source: docs/dogfood/log.md Run#1",
       "phase": "drydock",
       "createdAt": "2026-08-29T06:03:51.533Z",
-      "updatedAt": "2026-08-29T06:03:51.536Z"
+      "updatedAt": "2026-08-29T06:06:15.554Z"
     },
     {
       "id": "F-0003",
@@ -35,11 +35,21 @@
       "id": "F-0004",
       "title": "launch lacks a brief-quality self-check list before Phase 1",
       "category": "protocol",
-      "status": "confirmed",
+      "status": "fixed",
       "detail": "Fix candidate: add brief self-check (objective named? scope boundary named? non-goals?) to launch skill. Source: docs/dogfood/log.md Run#1",
       "phase": "converge",
       "createdAt": "2026-08-29T06:03:51.545Z",
-      "updatedAt": "2026-08-29T06:03:51.548Z"
+      "updatedAt": "2026-08-29T06:06:15.556Z"
+    },
+    {
+      "id": "F-0005",
+      "title": "Cross-ticket integration gap: T3 static files were never wired into the server",
+      "category": "protocol",
+      "status": "fixed",
+      "detail": "T3 delivered public/ but server wiring belonged to no ticket; T5 had to add src/static.js. Fix candidate: launch Phase 3 must give every slice its wiring + smoke assertion, or add an explicit integration ticket.",
+      "phase": "execute",
+      "createdAt": "2026-08-29T06:06:15.548Z",
+      "updatedAt": "2026-08-29T06:07:41.809Z"
     }
   ]
 }
