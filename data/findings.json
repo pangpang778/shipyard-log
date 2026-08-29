@@ -105,11 +105,11 @@
       "id": "F-0011",
       "title": "[drydock] no post-scaffold self-audit step",
       "category": "protocol",
-      "status": "confirmed",
+      "status": "fixed",
       "detail": "Run 4 operator missed docs/business/ and git init — checklist exists but nothing forces a final audit. Fix candidate: drydock ends with self-audit (or runs sy check on itself). Source: Run 4.",
       "phase": "drydock",
       "createdAt": "2026-08-29T08:06:14.806Z",
-      "updatedAt": "2026-08-29T08:06:14.807Z"
+      "updatedAt": "2026-08-29T09:39:44.232Z"
     },
     {
       "id": "F-0012",
