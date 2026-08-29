@@ -24,12 +24,13 @@ const FILTER_KEYS = ["status", "category", "phase"];
 const EMPTY_HINT = "记录第一条 finding";
 
 const state = {
-  filters: { status: "", category: "", phase: "" },
+  filters: { status: "", category: "", phase: "", q: "" },
   findings: [],
   stats: null, // { byStatus, byCategory, total }
   statsError: false,
   loading: false,
   posting: false,
+  editingId: null, // 正在内联编辑的 finding id（null = 未编辑）
   error: null, // { message }
 };
 
@@ -86,6 +87,7 @@ async function loadFindings() {
   for (const key of FILTER_KEYS) {
     if (state.filters[key]) params.set(key, state.filters[key]);
   }
+  if (state.filters.q && state.filters.q.trim()) params.set("q", state.filters.q.trim());
   const query = params.toString();
   const seq = ++fetchSeq; // 请求序号：快速切换过滤时丢弃过期响应
   state.loading = true;
@@ -110,6 +112,14 @@ async function loadFindings() {
 function setFilter(key, value) {
   state.filters[key] = value;
   loadFindings();
+}
+
+let searchTimer = null;
+/** 轻量 debounce：停止输入 250ms 后才发请求，避免逐键击发。 */
+function scheduleSearch(value) {
+  state.filters.q = value;
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(loadFindings, 250);
 }
 
 /** 统计失败不阻塞列表：面板降级为占位提示。 */
@@ -148,6 +158,22 @@ async function transitionStatus(finding, to) {
       body: { to },
     });
     state.error = null;
+    await Promise.all([loadFindings(), loadStats()]);
+  } catch (err) {
+    state.error = { message: err.message };
+    render();
+  }
+}
+
+/** PATCH /api/findings/:id — 用表单里的全部可编辑字段更新一条 finding 的元数据。 */
+async function updateFinding(finding, payload) {
+  try {
+    await request(`/api/findings/${encodeURIComponent(String(finding.id))}`, {
+      method: "PATCH",
+      body: payload,
+    });
+    state.error = null;
+    state.editingId = null;
     await Promise.all([loadFindings(), loadStats()]);
   } catch (err) {
     state.error = { message: err.message };
@@ -195,7 +221,7 @@ function sortedFindings() {
 }
 
 function hasActiveFilters() {
-  return FILTER_KEYS.some((key) => state.filters[key]);
+  return FILTER_KEYS.some((key) => state.filters[key]) || Boolean(state.filters.q.trim());
 }
 
 function fmtTime(iso) {
@@ -257,9 +283,19 @@ function renderToolbar() {
       select,
     );
   };
+  const search = el("input", {
+    id: "search-findings",
+    class: "field field--filter field--search",
+    type: "search",
+    placeholder: "搜索 title / detail…",
+    "aria-label": "搜索 finding",
+    oninput: (event) => scheduleSearch(event.target.value),
+  });
+  search.value = state.filters.q;
   return el(
     "div",
     { class: "toolbar" },
+    search,
     field("status", "status", STATUSES),
     field("category", "category", CATEGORIES),
     field("phase", "phase", PHASES),
@@ -380,10 +416,97 @@ function statusActions(finding) {
   );
 }
 
+function toggleEdit(id) {
+  state.editingId = state.editingId === id ? null : id;
+  render();
+}
+
+function cancelEdit(id) {
+  if (state.editingId === id) state.editingId = null;
+  render();
+}
+
+function onUpdateSubmit(event, finding) {
+  event.preventDefault();
+  const data = new FormData(event.currentTarget);
+  const payload = {
+    title: String(data.get("title") ?? "").trim(),
+    category: String(data.get("category") ?? ""),
+    phase: String(data.get("phase") ?? ""),
+    detail: String(data.get("detail") ?? "").trim(),
+  };
+  updateFinding(finding, payload);
+}
+
+/** 内联编辑表单：预填 finding 当前的 title/detail/category/phase，保存走 PATCH。 */
+function editForm(finding) {
+  const id = String(finding?.id ?? "?");
+  const titleInput = el("input", {
+    name: "title",
+    type: "text",
+    maxlength: "120",
+    required: true,
+  });
+  titleInput.value = String(finding?.title ?? "");
+  const detailInput = el("textarea", { name: "detail", rows: "3" });
+  detailInput.value = String(finding?.detail ?? "");
+  return el(
+    "form",
+    { class: "finding-edit", autocomplete: "off", onsubmit: (event) => onUpdateSubmit(event, finding) },
+    el(
+      "div",
+      { class: "form-grid" },
+      el(
+        "div",
+        { class: "field field--wide" },
+        el("label", { class: "field-label" }, "title"),
+        titleInput,
+      ),
+      el(
+        "div",
+        { class: "field" },
+        el("label", { class: "field-label" }, "category"),
+        enumSelect("category", CATEGORIES, finding?.category ?? ""),
+      ),
+      el(
+        "div",
+        { class: "field" },
+        el("label", { class: "field-label" }, "phase"),
+        enumSelect("phase", PHASES, finding?.phase ?? ""),
+      ),
+      el(
+        "div",
+        { class: "field field--wide" },
+        el("label", { class: "field-label" }, "detail"),
+        detailInput,
+      ),
+    ),
+    el(
+      "div",
+      { class: "form-actions" },
+      el("button", { type: "submit", class: "btn--primary" }, "保存"),
+      el("button", { type: "button", onclick: () => cancelEdit(id) }, "取消"),
+    ),
+  );
+}
+
 function renderFinding(finding) {
   const id = String(finding?.id ?? "?");
   const detail = String(finding?.detail ?? "").trim();
-  const actions = statusActions(finding);
+  const isEditing = state.editingId === finding.id;
+  const actions = [
+    el(
+      "button",
+      {
+        type: "button",
+        title: isEditing ? "取消编辑" : "编辑 title / detail / category / phase",
+        "aria-expanded": isEditing ? "true" : "false",
+        onclick: () => toggleEdit(id),
+      },
+      isEditing ? "取消编辑" : "编辑",
+    ),
+    ...statusActions(finding),
+  ];
   return el(
     "article",
     { class: "finding", "data-id": id, "data-status": String(finding?.status ?? "") },
@@ -398,6 +521,7 @@ function renderFinding(finding) {
     ),
     detail ? el("p", { class: "finding-detail" }, detail) : null,
     actions.length ? el("div", { class: "finding-actions" }, actions) : null,
+    isEditing ? editForm(finding) : null,
   );
 }
 

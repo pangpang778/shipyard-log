@@ -35,7 +35,7 @@ export function toErrorResponse(err) {
   return { status: 500, body: { error: { code: 'INTERNAL', message: 'internal server error' } } };
 }
 
-/** Extract {status?, category?, phase?} from query params; empty values count as absent. */
+/** Extract {status?, category?, phase?, q?} from query params; empty values count as absent. */
 function filterFromQuery(query) {
   const filter = {};
   for (const key of QUERY_FILTER_KEYS) {
@@ -43,6 +43,11 @@ function filterFromQuery(query) {
     if (typeof value === 'string' && value.length > 0) {
       filter[key] = value;
     }
+  }
+  // q is free-text search (title+detail substring); blank/whitespace-only counts as
+  // absent (the store also ignores it). multi-q keeps last-wins via Object.fromEntries.
+  if (typeof query.q === 'string' && query.q.trim().length > 0) {
+    filter.q = query.q;
   }
   return filter;
 }
@@ -77,6 +82,20 @@ export function createFindingsHandlers(store) {
     async transition({ params, body }) {
       try {
         const finding = await store.transition(params.id, body?.to);
+        return { status: 200, body: finding };
+      } catch (err) {
+        return toErrorResponse(err);
+      }
+    },
+
+    /**
+     * PATCH /api/findings/:id — partially edit a finding's metadata (US? / TICKET 01).
+     * Protected-key rejection lives at the store layer (it owns validation); the
+     * handler just translates coded errors through toErrorResponse.
+     */
+    async update({ params, body }) {
+      try {
+        const finding = await store.update(params.id, body);
         return { status: 200, body: finding };
       } catch (err) {
         return toErrorResponse(err);

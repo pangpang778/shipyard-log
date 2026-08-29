@@ -1,5 +1,5 @@
 {
-  "seq": 5,
+  "seq": 6,
   "findings": [
     {
       "id": "F-0001",
@@ -35,21 +35,31 @@
       "id": "F-0004",
       "title": "launch lacks a brief-quality self-check list before Phase 1",
       "category": "protocol",
-      "status": "fixed",
+      "status": "shipped",
       "detail": "Fix candidate: add brief self-check (objective named? scope boundary named? non-goals?) to launch skill. Source: docs/dogfood/log.md Run#1",
       "phase": "converge",
       "createdAt": "2026-08-29T06:03:51.545Z",
-      "updatedAt": "2026-08-29T06:06:15.556Z"
+      "updatedAt": "2026-08-29T06:40:11.103Z"
     },
     {
       "id": "F-0005",
       "title": "Cross-ticket integration gap: T3 static files were never wired into the server",
       "category": "protocol",
-      "status": "fixed",
+      "status": "shipped",
       "detail": "T3 delivered public/ but server wiring belonged to no ticket; T5 had to add src/static.js. Fix candidate: launch Phase 3 must give every slice its wiring + smoke assertion, or add an explicit integration ticket.",
       "phase": "execute",
       "createdAt": "2026-08-29T06:06:15.548Z",
-      "updatedAt": "2026-08-29T06:07:41.809Z"
+      "updatedAt": "2026-08-29T06:40:11.108Z"
+    },
+    {
+      "id": "F-0006",
+      "title": "Headless launch: orchestrator timeout killed session mid-Phase-4",
+      "category": "ux",
+      "status": "open",
+      "detail": "Recovery via claude --continue + on-disk paper trail was near-zero cost. Fix candidate: launch hygiene section should suggest --output-format stream-json (or periodic progress markers) for long headless runs so the orchestrator sees liveness. Source: Run 2.",
+      "phase": "execute",
+      "createdAt": "2026-08-29T06:40:58.988Z",
+      "updatedAt": "2026-08-29T06:40:58.988Z"
     }
   ]
 }

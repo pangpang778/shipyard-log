@@ -309,3 +309,251 @@ test('ids are monotonic and never reused after wontfix (no physical delete)', as
   const c = await store.add({ title: 'C', category: 'naming', phase: 'tickets' });
   assert.equal(c.id, 'F-0003');
 });
+
+// ---- TICKET 01 (S1): edit finding via store.update(id, changes) ----
+
+test('update partially edits only provided fields, bumps updatedAt, keeps id/createdAt/status, persists', async (t) => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'shipyard-store-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const file = path.join(dir, 'findings.json');
+  const store = await createStore(file);
+
+  t.mock.timers.enable({ apis: ['Date'] });
+  t.mock.timers.setTime(1_700_000_000_000);
+  const created = await store.add({
+    title: 'Original',
+    category: 'protocol',
+    phase: 'drydock',
+    detail: 'old detail',
+  });
+  await store.transition('F-0001', 'confirmed'); // metadata edit off a non-open status is allowed
+
+  t.mock.timers.setTime(1_700_000_060_000);
+  const updated = await store.update('F-0001', { title: 'Renamed', phase: 'execute' });
+
+  assert.equal(updated.id, 'F-0001');
+  assert.equal(updated.title, 'Renamed');
+  assert.equal(updated.phase, 'execute');
+  assert.equal(updated.category, 'protocol', 'absent field stays untouched');
+  assert.equal(updated.detail, 'old detail', 'absent field stays untouched');
+  assert.equal(updated.status, 'confirmed', 'status is immutable through a metadata edit');
+  assert.equal(updated.createdAt, created.createdAt, 'createdAt is immutable');
+  assert.equal(new Date(updated.updatedAt).getTime(), 1_700_000_060_000, 'updatedAt advances to now');
+  assert.ok(updated.updatedAt > created.updatedAt, 'updatedAt must strictly advance');
+
+  // persisted state reflects the edit; nothing else changed (incl. the seq counter)
+  const onDisk = JSON.parse(await readFile(file, 'utf8'));
+  assert.equal(onDisk.seq, 1, 'an edit must not consume a seq / burn an id');
+  const record = onDisk.findings.find((f) => f.id === 'F-0001');
+  assert.deepEqual(
+    {
+      title: record.title,
+      phase: record.phase,
+      category: record.category,
+      detail: record.detail,
+      status: record.status,
+    },
+    {
+      title: 'Renamed',
+      phase: 'execute',
+      category: 'protocol',
+      detail: 'old detail',
+      status: 'confirmed',
+    },
+  );
+});
+
+test('update allows a single editable field (partial-only) and empty detail to be cleared', async (t) => {
+  const store = await tempStore(t);
+  const created = await store.add({
+    title: 'A',
+    category: 'docs',
+    phase: 'spec',
+    detail: 'some original detail',
+  });
+
+  const detailOnly = await store.update('F-0001', { detail: '' });
+  assert.equal(detailOnly.title, 'A', 'title untouched when only detail is edited');
+  assert.equal(detailOnly.detail, '', 'detail can be cleared');
+  assert.equal(detailOnly.category, 'docs');
+  assert.equal(detailOnly.phase, 'spec');
+  assert.ok(detailOnly.updatedAt > created.updatedAt, 'updatedAt advances on a single-field edit');
+});
+
+test('update rejects invalid values with VALIDATION and leaves disk + unrelated fields untouched', async (t) => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'shipyard-store-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const file = path.join(dir, 'findings.json');
+  const store = await createStore(file);
+  await store.add({ title: 'A', category: 'protocol', phase: 'drydock', detail: 'keep' });
+  const before = await store.get('F-0001');
+
+  const bad = [
+    {}, // nothing to edit
+    { title: '' }, // empty title
+    { title: '   ' }, // whitespace-only title
+    { title: 'x'.repeat(121) }, // oversized title
+    { title: 42 }, // title not a string
+    { category: 'bug' }, // category not in enum
+    { phase: 'qa' }, // phase not in enum
+    { detail: 7 }, // detail not a string
+    null, // not an object
+    42, // not an object
+  ];
+  for (const changes of bad) {
+    await rejectsWith(store.update('F-0001', changes), 'VALIDATION');
+  }
+
+  const after = await store.get('F-0001');
+  assert.deepEqual(
+    {
+      title: after.title,
+      category: after.category,
+      phase: after.phase,
+      detail: after.detail,
+      updatedAt: after.updatedAt,
+    },
+    {
+      title: before.title,
+      category: before.category,
+      phase: before.phase,
+      detail: before.detail,
+      updatedAt: before.updatedAt,
+    },
+    'rejected edits must not change the record or bump updatedAt',
+  );
+
+  const onDisk = JSON.parse(await readFile(file, 'utf8'));
+  assert.deepEqual(
+    { title: onDisk.findings[0].title, category: onDisk.findings[0].category },
+    { title: 'A', category: 'protocol' },
+    'disk must be untouched by rejected edits',
+  );
+});
+
+test('update rejects protected fields (id/createdAt/status) fail-fast and reports NOT_FOUND for unknown ids', async (t) => {
+  const store = await tempStore(t);
+  await store.add({ title: 'A', category: 'protocol', phase: 'drydock' });
+
+  for (const changes of [{ id: 'F-9999' }, { createdAt: 'x' }, { status: 'shipped' }]) {
+    await rejectsWith(store.update('F-0001', changes), 'VALIDATION');
+  }
+  // fail-fast: a protected key is rejected even alongside a valid editable field
+  await rejectsWith(store.update('F-0001', { title: 'ok', status: 'shipped' }), 'VALIDATION');
+  await rejectsWith(store.update('F-0001', { title: 'ok', id: 'F-0001' }), 'VALIDATION');
+
+  await rejectsWith(store.update('F-9999', { title: 'ok' }), 'NOT_FOUND');
+  await rejectsWith(store.update('no-such-id', { title: 'ok' }), 'NOT_FOUND');
+
+  const f = await store.get('F-0001');
+  assert.equal(f.title, 'A', 'rejected edits must not change the record');
+  assert.equal(f.status, 'open');
+  assert.equal(f.updatedAt, f.createdAt, 'rejected edits must not bump updatedAt');
+});
+
+test('update allows metadata edits on every status, including terminal shipped and wontfix', async (t) => {
+  const store = await tempStore(t);
+
+  const fixed = await store.add({ title: 'F', category: 'ux', phase: 'execute' });
+  await store.transition('F-0001', 'confirmed');
+  await store.transition('F-0001', 'fixed');
+  await store.transition('F-0001', 'shipped');
+  const shippedEdited = await store.update('F-0001', { title: 'edited shipped' });
+  assert.equal(shippedEdited.status, 'shipped');
+  assert.equal(shippedEdited.title, 'edited shipped');
+
+  await store.add({ title: 'W', category: 'ux', phase: 'execute' }); // F-0002
+  await store.transition('F-0002', 'wontfix');
+  const wontfixEdited = await store.update('F-0002', { title: 'edited wontfix' });
+  assert.equal(wontfixEdited.status, 'wontfix');
+  assert.equal(wontfixEdited.title, 'edited wontfix');
+});
+
+// ---- TICKET 02 (S1): full-text search via list({q}) ----
+
+test('list({q}) matches a case-insensitive substring of title or detail, newest first', async (t) => {
+  const store = await tempStore(t);
+  await store.add({
+    title: 'CRLF injection in logs',
+    category: 'protocol',
+    phase: 'drydock',
+    detail: 'echo CRLF into the log line',
+  }); // F-0001
+  await store.add({
+    title: 'Pyramid',
+    category: 'ux',
+    phase: 'execute',
+    detail: 'CRLF flows into detail only',
+  }); // F-0002
+  await store.add({ title: 'Raft', category: 'docs', phase: 'spec', detail: 'unrelated detail' }); // F-0003
+
+  // title hit
+  assert.deepEqual((await store.list({ q: 'CRLF injection' })).map((f) => f.id), ['F-0001']);
+  // detail hit
+  assert.deepEqual((await store.list({ q: 'flows into detail' })).map((f) => f.id), ['F-0002']);
+  // case-insensitive: lowercase q matches uppercase CRLF in both title and detail
+  assert.deepEqual((await store.list({ q: 'crlf' })).map((f) => f.id), ['F-0002', 'F-0001']);
+  // no match → empty list
+  assert.deepEqual(await store.list({ q: 'zzz-no-hits' }), []);
+
+  // search results must not leak internal references (snapshots)
+  const copy = await store.list({ q: 'crlf' });
+  copy[0].title = 'mutated';
+  assert.equal((await store.list({ q: 'crlf' }))[0].title, 'Pyramid', 'mutating a result must not touch the store');
+});
+
+test('list({q}) AND-combines with status/category/phase filters and preserves order', async (t) => {
+  const store = await tempStore(t);
+  await store.add({ title: 'Bug in drydock phase', category: 'protocol', phase: 'drydock' }); // F-0001
+  await store.add({ title: 'Bug in execute', category: 'ux', phase: 'execute' }); // F-0002
+  await store.add({ title: 'bug hunt drydock', category: 'ux', phase: 'drydock' }); // F-0003
+  // a ux/drydock finding whose title/detail lack 'bug' — proves q truly filters
+  await store.add({ title: 'Raft review', category: 'ux', phase: 'drydock' }); // F-0004
+  await store.transition('F-0002', 'confirmed');
+
+  // q alone (F-0004 lacks the term and must be excluded)
+  assert.deepEqual((await store.list({ q: 'bug' })).map((f) => f.id), ['F-0003', 'F-0002', 'F-0001']);
+  // q AND category (F-0004 is ux but lacks 'bug')
+  assert.deepEqual((await store.list({ q: 'bug', category: 'ux' })).map((f) => f.id), ['F-0003', 'F-0002']);
+  // q AND phase (F-0004 is drydock but lacks 'bug')
+  assert.deepEqual((await store.list({ q: 'bug', phase: 'drydock' })).map((f) => f.id), ['F-0003', 'F-0001']);
+  // q AND status
+  assert.deepEqual((await store.list({ q: 'bug', status: 'confirmed' })).map((f) => f.id), ['F-0002']);
+  // q AND multiple filters, newest-first preserved
+  assert.deepEqual(
+    (await store.list({ q: 'bug', category: 'ux', phase: 'execute' })).map((f) => f.id),
+    ['F-0002'],
+  );
+});
+
+test('list ignores an empty or whitespace-only q and piles onto the other filters like a no-op', async (t) => {
+  const store = await tempStore(t);
+  await store.add({ title: 'Alpha', category: 'protocol', phase: 'drydock' }); // F-0001
+  await store.add({ title: 'Beta', category: 'ux', phase: 'drydock' }); // F-0002
+
+  for (const q of [undefined, '', '   ']) {
+    assert.deepEqual(
+      (await store.list({ q })).map((f) => f.id),
+      ['F-0002', 'F-0001'],
+      `q=${JSON.stringify(q)} must be treated as absent`,
+    );
+  }
+  // whitespace-only q next to a real filter behaves as if q were absent
+  assert.deepEqual((await store.list({ q: '  ', category: 'ux' })).map((f) => f.id), ['F-0002']);
+});
+
+test('list({q}) still validates enum filters and rejects a non-string q at the store boundary', async (t) => {
+  const store = await tempStore(t);
+  await store.add({ title: 'A', category: 'protocol', phase: 'drydock' });
+
+  // an invalid enum filter alongside a valid q is still a VALIDATION error
+  await rejectsWith(store.list({ q: 'a', category: 'bug' }), 'VALIDATION');
+  await rejectsWith(store.list({ q: 'a', status: 'nope' }), 'VALIDATION');
+  await rejectsWith(store.list({ q: 'a', phase: 'qa' }), 'VALIDATION');
+
+  // q is free text (no enum), but a non-string q is rejected at the store boundary
+  await rejectsWith(store.list({ q: 42 }), 'VALIDATION');
+  await rejectsWith(store.list({ q: null }), 'VALIDATION');
+  await rejectsWith(store.list({ q: ['x'] }), 'VALIDATION');
+  await rejectsWith(store.list({ q: {} }), 'VALIDATION');
+});

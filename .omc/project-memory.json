@@ -1,0 +1,196 @@
+{
+  "version": "1.0.0",
+  "lastScanned": 1787984167555,
+  "projectRoot": "C:\\Users\\Administrator\\orca\\shipyard-log",
+  "techStack": {
+    "languages": [
+      {
+        "name": "JavaScript/TypeScript",
+        "version": ">=24",
+        "confidence": "high",
+        "markers": [
+          "package.json"
+        ]
+      }
+    ],
+    "frameworks": [],
+    "packageManager": "npm",
+    "runtime": "Node.js 24"
+  },
+  "build": {
+    "buildCommand": null,
+    "testCommand": "npm test",
+    "lintCommand": null,
+    "devCommand": "npm run start",
+    "scripts": {
+      "test": "node --test",
+      "start": "node src/server.js"
+    }
+  },
+  "conventions": {
+    "namingStyle": "camelCase/PascalCase",
+    "importStyle": null,
+    "testPattern": null,
+    "fileOrganization": null
+  },
+  "structure": {
+    "isMonorepo": false,
+    "workspaces": [],
+    "mainDirectories": [
+      "docs",
+      "public",
+      "scripts",
+      "src"
+    ],
+    "gitBranches": null
+  },
+  "customNotes": [],
+  "directoryMap": {
+    "data": {
+      "path": "data",
+      "purpose": "Data files",
+      "fileCount": 1,
+      "lastAccessed": 1787984167512,
+      "keyFiles": [
+        "findings.json"
+      ]
+    },
+    "design-system": {
+      "path": "design-system",
+      "purpose": null,
+      "fileCount": 1,
+      "lastAccessed": 1787984167513,
+      "keyFiles": [
+        "README.md"
+      ]
+    },
+    "docs": {
+      "path": "docs",
+      "purpose": "Documentation",
+      "fileCount": 0,
+      "lastAccessed": 1787984167520,
+      "keyFiles": []
+    },
+    "public": {
+      "path": "public",
+      "purpose": "Public files",
+      "fileCount": 3,
+      "lastAccessed": 1787984167521,
+      "keyFiles": [
+        "app.js",
+        "index.html",
+        "tokens.css"
+      ]
+    },
+    "scripts": {
+      "path": "scripts",
+      "purpose": "Build/utility scripts",
+      "fileCount": 2,
+      "lastAccessed": 1787984167521,
+      "keyFiles": [
+        "README.md",
+        "seed-findings.mjs"
+      ]
+    },
+    "src": {
+      "path": "src",
+      "purpose": "Source code",
+      "fileCount": 6,
+      "lastAccessed": 1787984167521,
+      "keyFiles": [
+        "server.js",
+        "server.test.js",
+        "smoke.test.js",
+        "static.js",
+        "store.js"
+      ]
+    }
+  },
+  "hotPaths": [
+    {
+      "path": "public/app.js",
+      "accessCount": 18,
+      "lastAccessed": 1787985490391,
+      "type": "file"
+    },
+    {
+      "path": "src/store.js",
+      "accessCount": 10,
+      "lastAccessed": 1787985189152,
+      "type": "file"
+    },
+    {
+      "path": "src/server.test.js",
+      "accessCount": 10,
+      "lastAccessed": 1787985447415,
+      "type": "file"
+    },
+    {
+      "path": "src/server.js",
+      "accessCount": 8,
+      "lastAccessed": 1787985494609,
+      "type": "file"
+    },
+    {
+      "path": "src/handlers/findings.js",
+      "accessCount": 7,
+      "lastAccessed": 1787985349344,
+      "type": "file"
+    },
+    {
+      "path": "src/store.test.js",
+      "accessCount": 6,
+      "lastAccessed": 1787985161872,
+      "type": "file"
+    },
+    {
+      "path": "src/smoke.test.js",
+      "accessCount": 6,
+      "lastAccessed": 1787985304150,
+      "type": "file"
+    },
+    {
+      "path": "docs/standards/data.md",
+      "accessCount": 2,
+      "lastAccessed": 1787984682192,
+      "type": "file"
+    },
+    {
+      "path": "public/index.html",
+      "accessCount": 2,
+      "lastAccessed": 1787985042457,
+      "type": "file"
+    },
+    {
+      "path": "src",
+      "accessCount": 2,
+      "lastAccessed": 1787985499142,
+      "type": "directory"
+    },
+    {
+      "path": "public",
+      "accessCount": 2,
+      "lastAccessed": 1787985499822,
+      "type": "directory"
+    },
+    {
+      "path": "docs/standards/architecture.md",
+      "accessCount": 1,
+      "lastAccessed": 1787984318620,
+      "type": "file"
+    },
+    {
+      "path": "src/handlers/stats.js",
+      "accessCount": 1,
+      "lastAccessed": 1787984343488,
+      "type": "file"
+    },
+    {
+      "path": "docs/dogfood/report-run1.md",
+      "accessCount": 1,
+      "lastAccessed": 1787984343776,
+      "type": "file"
+    }
+  ],
+  "userDirectives": []
+}

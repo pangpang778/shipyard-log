@@ -22,6 +22,10 @@ const TRANSITIONS = Object.freeze({
 
 const TITLE_MAX_LENGTH = 120;
 
+// Editable keys on PATCH /api/findings/:id; everything else a finding holds is readonly.
+const EDITABLE_KEYS = Object.freeze(['title', 'detail', 'category', 'phase']);
+const PROTECTED_KEYS = Object.freeze(['id', 'createdAt', 'status']);
+
 /** Error with a machine-readable `code`, translated to HTTP by the handler layer (T2). */
 export class StoreError extends Error {
   constructor(code, message) {
@@ -137,7 +141,9 @@ class Store {
 
   /**
    * List findings, newest first. `filter` accepts any combination of
-   * {status, category, phase}; omitted/empty filter returns everything.
+   * {status, category, phase, q}; omitted/empty filter returns everything.
+   * `q` is a case-insensitive free-text substring of title OR detail, AND-combined
+   * with the enum filters; an empty or whitespace-only `q` counts as absent.
    */
   async list(filter = {}) {
     if (filter === null || typeof filter !== 'object' || Array.isArray(filter)) {
@@ -146,8 +152,24 @@ class Store {
     validateEnumIfPresent(filter.status, STATUSES, 'status');
     validateEnumIfPresent(filter.category, CATEGORIES, 'category');
     validateEnumIfPresent(filter.phase, PHASES, 'phase');
+    // q is free text (not validated against enums), but a non-string q is still
+    // rejected at the store boundary, consistent with the other filter keys;
+    // the handler layer never sends a non-string q.
+    if (filter.q !== undefined && typeof filter.q !== 'string') {
+      throw new StoreError('VALIDATION', 'q must be a string when provided');
+    }
+    const needle = typeof filter.q === 'string' && filter.q.trim().length > 0
+      ? filter.q.toLowerCase()
+      : undefined;
     const keys = ['status', 'category', 'phase'].filter((k) => filter[k] !== undefined);
-    const matches = this.#db.findings.filter((f) => keys.every((k) => f[k] === filter[k]));
+    const matches = this.#db.findings.filter((f) => {
+      if (!keys.every((k) => f[k] === filter[k])) return false;
+      if (needle === undefined) return true;
+      return (
+        f.title.toLowerCase().includes(needle) ||
+        f.detail.toLowerCase().includes(needle)
+      );
+    });
     // Findings are append-only, so reverse insertion order === newest first
     // (avoids fragile lexicographic id comparison past F-9999).
     return matches.slice().reverse().map(snapshot);
@@ -173,6 +195,16 @@ class Store {
   /** Move a finding along the status machine; persists the update. */
   transition(id, to) {
     return this.#enqueue(() => this.#transition(id, to));
+  }
+
+  /**
+   * Partially edit a finding's metadata (title/detail/category/phase), persisting
+   * on success. `id`/`createdAt`/`status` are immutable and rejected (VALIDATION);
+   * an unknown id is NOT_FOUND. Only the editable keys present in `changes` are
+   * read; `updatedAt` advances only on a successful write.
+   */
+  update(id, changes) {
+    return this.#enqueue(() => this.#update(id, changes));
   }
 
   #enqueue(operation) {
@@ -224,6 +256,47 @@ class Store {
     finding.updatedAt = nowIso();
     await this.#persist();
     return snapshot(finding);
+  }
+
+  async #update(id, changes) {
+    const finding = this.#db.findings.find((f) => f.id === id);
+    if (!finding) {
+      throw new StoreError('NOT_FOUND', `no finding with id ${JSON.stringify(id)}`);
+    }
+    if (changes === null || typeof changes !== 'object' || Array.isArray(changes)) {
+      throw new StoreError('VALIDATION', 'changes must be a plain object');
+    }
+    // Fail-fast: a client trying to change a protected field here must learn
+    // it's on the wrong endpoint (status edits live on /:id/status).
+    const protectedKey = PROTECTED_KEYS.find((key) => Object.hasOwn(changes, key));
+    if (protectedKey) {
+      throw new StoreError('VALIDATION', `${protectedKey} is immutable and cannot be updated`);
+    }
+
+    const edits = {};
+    for (const key of EDITABLE_KEYS) {
+      if (Object.hasOwn(changes, key)) edits[key] = changes[key];
+    }
+    if (Object.keys(edits).length === 0) {
+      throw new StoreError(
+        'VALIDATION',
+        'at least one editable field (title, detail, category, phase) is required',
+      );
+    }
+    if (Object.hasOwn(edits, 'title')) edits.title = validateTitle(edits.title);
+    if (Object.hasOwn(edits, 'category')) {
+      edits.category = validateEnum(edits.category, CATEGORIES, 'category');
+    }
+    if (Object.hasOwn(edits, 'phase')) edits.phase = validateEnum(edits.phase, PHASES, 'phase');
+    if (Object.hasOwn(edits, 'detail')) edits.detail = validateDetail(edits.detail);
+
+    const updated = { ...finding, ...edits, updatedAt: nowIso() };
+    this.#db = {
+      seq: this.#db.seq,
+      findings: this.#db.findings.map((f) => (f.id === id ? updated : f)),
+    };
+    await this.#persist();
+    return snapshot(updated);
   }
 
   /** Atomic replace: write `path + '.tmp'`, then rename over the target. */

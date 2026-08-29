@@ -113,3 +113,29 @@ test('smoke: GET /api/export.md returns the markdown report including the findin
   assert.ok(res.raw.includes(title), `export must contain the finding title:\n${res.raw}`);
   assert.ok(res.raw.includes(created.body.id), 'export must contain the finding id');
 });
+
+test('smoke: the edit mount point ships in the served front-end bundle (TICKET 01, S3)', async (t) => {
+  const base = await startSmokeServer(t);
+
+  // Shallow signal: the front-end bundle served to the browser must carry the
+  // inline edit form mount point and its PATCH action (deep UI interactions stay
+  // out of scope for smoke). The edit form is mounted per finding into the #app list.
+  const res = await request(base, '/app.js');
+  assert.equal(res.status, 200, 'GET /app.js must be 200');
+  assert.match(res.contentType ?? '', /^text\/javascript/);
+  assert.ok(res.raw.includes('finding-edit'), 'app.js must mount an inline edit-form point');
+  assert.ok(res.raw.includes('updateFinding'), 'app.js must wire the PATCH update action');
+});
+
+test('smoke: the search box ships in the served front-end bundle (TICKET 02, S3)', async (t) => {
+  const base = await startSmokeServer(t);
+
+  // Shallow signal: the front-end bundle served to the browser must carry the
+  // search input mount point and its debounced action (deep UI interactions stay
+  // out of scope for smoke). The search box lives in the #app toolbar.
+  const res = await request(base, '/app.js');
+  assert.equal(res.status, 200, 'GET /app.js must be 200');
+  assert.match(res.contentType ?? '', /^text\/javascript/);
+  assert.ok(res.raw.includes('search-findings'), 'app.js must mount a search box');
+  assert.ok(res.raw.includes('scheduleSearch'), 'app.js must wire the debounced search action');
+});

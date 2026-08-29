@@ -451,3 +451,227 @@ test('GET /api/export.md escapes pipes and flattens newlines in titles so tables
   const md = await res.text();
   assert.ok(md.includes('a \\| b c'), `expected escaped/flattened title, got:\n${md}`);
 });
+
+// ---- TICKET 01 (S2): PATCH /api/findings/:id — partial metadata edit ----
+
+test('PATCH /api/findings/:id partially edits metadata, bumps updatedAt, never changes status/createdAt', async (t) => {
+  const { base } = await startServer(t);
+  const created = await json(base, '/api/findings', {
+    method: 'POST',
+    body: {
+      title: 'Old',
+      category: 'protocol',
+      phase: 'drydock',
+      detail: 'keep this detail',
+    },
+  });
+  const id = created.body.id;
+  // move to a non-open status to prove metadata edits are allowed off open
+  const moved = await json(base, `/api/findings/${id}/status`, {
+    method: 'PATCH',
+    body: { to: 'confirmed' },
+  });
+  assert.equal(moved.status, 200);
+
+  const res = await json(base, `/api/findings/${id}`, {
+    method: 'PATCH',
+    body: { title: 'New title', detail: '' },
+  });
+  assert.equal(res.status, 200);
+  assert.match(res.contentType ?? '', /application\/json/);
+  assertFindingShape(res.body);
+  assert.equal(res.body.title, 'New title');
+  assert.equal(res.body.detail, '', 'detail was cleared');
+  assert.equal(res.body.category, 'protocol', 'absent field stays unchanged');
+  assert.equal(res.body.phase, 'drydock', 'absent field stays unchanged');
+  assert.equal(res.body.status, 'confirmed', 'status is not editable through this endpoint');
+  assert.equal(res.body.createdAt, created.body.createdAt, 'createdAt is immutable');
+  assert.ok(res.body.updatedAt > created.body.updatedAt, 'updatedAt strictly advances');
+
+  // the edit persists through the store (list reflects it)
+  const list = await json(base, `/api/findings?status=confirmed`);
+  const record = list.body.find((f) => f.id === id);
+  assert.equal(record.title, 'New title');
+  assert.equal(record.detail, '');
+  assert.equal(record.status, 'confirmed');
+});
+
+test('PATCH /api/findings/:id: 400 VALIDATION for empty/invalid/protected edits, no side effects', async (t) => {
+  const { base } = await startServer(t);
+  const created = await json(base, '/api/findings', { method: 'POST', body: VALID_FINDING });
+  const id = created.body.id;
+  const url = `/api/findings/${id}`;
+
+  const badBodies = [
+    {}, // nothing editable
+    { title: '' },
+    { title: '   ' },
+    { title: 'x'.repeat(121) },
+    { title: 42 },
+    { category: 'bug' },
+    { phase: 'qa' },
+    { detail: 7 },
+    { id }, // protected
+    { createdAt: 'x' }, // protected
+    { status: 'shipped' }, // protected
+    { title: 'ok but status too', status: 'shipped' }, // protected even alongside a valid edit
+  ];
+  for (const body of badBodies) {
+    await assertErrorShape(await json(base, url, { method: 'PATCH', body }), 400, 'VALIDATION');
+  }
+  // a completely empty request body is also a 400
+  await assertErrorShape(await json(base, url, { method: 'PATCH' }), 400, 'VALIDATION');
+  await assertErrorShape(
+    await json(base, url, { method: 'PATCH', body: '{ not json' }),
+    400,
+    'VALIDATION',
+  );
+
+  const list = await json(base, '/api/findings');
+  const record = list.body.find((f) => f.id === id);
+  assert.deepEqual(
+    { title: record.title, category: record.category, status: record.status },
+    { title: VALID_FINDING.title, category: VALID_FINDING.category, status: 'open' },
+    'rejected edits must not change the record',
+  );
+});
+
+test('PATCH /api/findings/:id: 404 unknown id; GET /:id and /:id/status stay unchanged', async (t) => {
+  const { base } = await startServer(t);
+  const created = await json(base, '/api/findings', { method: 'POST', body: VALID_FINDING });
+  const id = created.body.id;
+
+  // unknown id through the edit endpoint → 404
+  await assertErrorShape(
+    await json(base, '/api/findings/F-9999', { method: 'PATCH', body: { title: 'x' } }),
+    404,
+    'NOT_FOUND',
+  );
+
+  // GET /api/findings/:id must stay 404 (no single-fetch endpoint exists)
+  await assertErrorShape(await json(base, `/api/findings/${id}`), 404, 'NOT_FOUND');
+
+  // a protected `status` edit on /:id is a fail-fast 400, never a silent transition;
+  // the authoritative /:id/status endpoint still works exactly as before
+  await assertErrorShape(
+    await json(base, `/api/findings/${id}`, { method: 'PATCH', body: { status: 'shipped' } }),
+    400,
+    'VALIDATION',
+  );
+  const moved = await json(base, `/api/findings/${id}/status`, {
+    method: 'PATCH',
+    body: { to: 'confirmed' },
+  });
+  assert.equal(moved.status, 200);
+  assert.equal(moved.body.status, 'confirmed');
+  const confirmed = await json(base, `/api/findings?status=confirmed`);
+  assert.deepEqual(
+    confirmed.body.map((f) => f.id),
+    [id],
+    'status only ever changes through the /status endpoint',
+  );
+});
+
+test('PATCH /api/findings/:id allows metadata edits on terminal statuses (shipped/wontfix)', async (t) => {
+  const { base } = await startServer(t);
+
+  const shipped = await json(base, '/api/findings', {
+    method: 'POST',
+    body: { title: 'S', category: 'docs', phase: 'spec' },
+  });
+  for (const to of ['confirmed', 'fixed', 'shipped']) {
+    await json(base, `/api/findings/${shipped.body.id}/status`, { method: 'PATCH', body: { to } });
+  }
+  const res = await json(base, `/api/findings/${shipped.body.id}`, {
+    method: 'PATCH',
+    body: { title: 'Edited after ship' },
+  });
+  assert.equal(res.status, 200);
+  assert.equal(res.body.title, 'Edited after ship');
+  assert.equal(res.body.status, 'shipped');
+});
+
+// ---- TICKET 02 (S2): GET /api/findings?q= — full-text search ----
+
+test('GET /api/findings?q= filters by case-insensitive substring of title or detail, newest first', async (t) => {
+  const { base } = await startServer(t);
+  await json(base, '/api/findings', {
+    method: 'POST',
+    body: { title: 'CRLF in logs', category: 'protocol', phase: 'drydock', detail: 'CRLF flows here' },
+  }); // F-0001
+  await json(base, '/api/findings', {
+    method: 'POST',
+    body: { title: 'Pyramid', category: 'ux', phase: 'execute', detail: 'only detail has crlf' },
+  }); // F-0002
+  const raft = await json(base, '/api/findings', {
+    method: 'POST',
+    body: { title: 'Raft', category: 'docs', phase: 'spec' },
+  }); // F-0003
+
+  const idsOf = async (query) => (await json(base, `/api/findings${query}`)).body.map((f) => f.id);
+
+  assert.deepEqual(await idsOf('?q=CRLF'), ['F-0002', 'F-0001'], 'title+detail hit, newest first');
+  assert.deepEqual(await idsOf('?q=crlf'), ['F-0002', 'F-0001'], 'case-insensitive');
+  assert.deepEqual(await idsOf('?q=detail'), ['F-0002'], 'detail hit (substring lives only in F-0002.detail)');
+  assert.deepEqual(await idsOf('?q=raft'), [raft.body.id], 'title hit');
+  assert.deepEqual(await idsOf('?q=no-such-term'), [], 'no match → empty 200, not an error');
+});
+
+test('GET /api/findings?q= AND-combines with status/category/phase in the same query', async (t) => {
+  const { base } = await startServer(t);
+  const a = await json(base, '/api/findings', {
+    method: 'POST',
+    body: { title: 'Bug in drydock', category: 'protocol', phase: 'drydock' },
+  });
+  const b = await json(base, '/api/findings', {
+    method: 'POST',
+    body: { title: 'Bug in execute', category: 'ux', phase: 'execute' },
+  });
+  const d = await json(base, '/api/findings', {
+    method: 'POST',
+    body: { title: 'bug hunt drydock', category: 'ux', phase: 'drydock' },
+  });
+  // a ux/drydock finding whose title/detail lack 'bug' — proves q truly filters
+  await json(base, '/api/findings', {
+    method: 'POST',
+    body: { title: 'Raft review', category: 'ux', phase: 'drydock' },
+  });
+  await json(base, `/api/findings/${b.body.id}/status`, { method: 'PATCH', body: { to: 'confirmed' } });
+
+  const idsOf = async (query) => (await json(base, `/api/findings${query}`)).body.map((f) => f.id);
+
+  assert.deepEqual(await idsOf('?q=bug'), [d.body.id, b.body.id, a.body.id], 'Raft must be excluded');
+  assert.deepEqual(await idsOf('?q=bug&category=ux'), [d.body.id, b.body.id]);
+  assert.deepEqual(await idsOf('?q=bug&phase=drydock'), [d.body.id, a.body.id]);
+  assert.deepEqual(await idsOf('?q=bug&status=confirmed'), [b.body.id]);
+  assert.deepEqual(await idsOf('?q=bug&category=ux&phase=execute'), [b.body.id]);
+});
+
+test('GET /api/findings?q= empty/whitespace q is absent; multi-q last-wins; invalid enum → 400', async (t) => {
+  const { base } = await startServer(t);
+  await json(base, '/api/findings', {
+    method: 'POST',
+    body: { title: 'Alpha', category: 'protocol', phase: 'drydock' },
+  }); // F-0001
+  await json(base, '/api/findings', {
+    method: 'POST',
+    body: { title: 'Beta', category: 'ux', phase: 'drydock' },
+  }); // F-0002
+
+  const idsOf = async (query) => (await json(base, `/api/findings${query}`)).body.map((f) => f.id);
+
+  // `?q=` and whitespace-only q are treated as absent → full filtered set, not a 400
+  assert.deepEqual(await idsOf('?q='), ['F-0002', 'F-0001']);
+  assert.deepEqual(await idsOf('?q=%20'), ['F-0002', 'F-0001'], 'whitespace q treated as absent');
+  // empty q still ANDs with the other filters
+  assert.deepEqual(await idsOf('?q=&category=ux'), ['F-0002']);
+  // multi-q keeps the last value wins (consistent with Object.fromEntries)
+  assert.deepEqual(await idsOf('?q=alpha&q=beta'), ['F-0002']);
+
+  // an invalid enum alongside a real q still fails with 400 VALIDATION
+  await assertErrorShape(await json(base, '/api/findings?q=alpha&status=bogus'), 400, 'VALIDATION');
+  await assertErrorShape(await json(base, '/api/findings?q=alpha&category=nope'), 400, 'VALIDATION');
+  await assertErrorShape(await json(base, '/api/findings?q=alpha&phase=qa'), 400, 'VALIDATION');
+  // empty q alongside an invalid enum still 400 (the enum is the problem, not q)
+  await assertErrorShape(await json(base, '/api/findings?q=&status=bogus'), 400, 'VALIDATION');
+});

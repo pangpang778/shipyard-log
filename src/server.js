@@ -18,6 +18,9 @@ const DEFAULT_PUBLIC_DIR = fileURLToPath(new URL('../public/', import.meta.url))
 
 const FINDINGS_ROUTE = '/api/findings';
 const TRANSITION_PATTERN = /^\/api\/findings\/([^/]+)\/status$/;
+// Single-segment id path distinct from the /:id/status sub-path and the bare
+// /api/findings collection; GET /api/findings/:id intentionally stays a 404.
+const FINDING_PATTERN = /^\/api\/findings\/([^/]+)$/;
 const STATS_ROUTE = '/api/stats';
 const EXPORT_ROUTE = '/api/export.md';
 
@@ -103,6 +106,16 @@ function matchRoute(method, pathname) {
       return { name: 'bad-id' };
     }
     return { name: 'transition', params: { id }, needsBody: true };
+  }
+  const findingMatch = FINDING_PATTERN.exec(pathname);
+  if (findingMatch && method === 'PATCH') {
+    let id;
+    try {
+      id = decodeURIComponent(findingMatch[1]);
+    } catch {
+      return { name: 'bad-id' };
+    }
+    return { name: 'update', params: { id }, needsBody: true };
   }
   return null;
 }
