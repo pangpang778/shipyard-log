@@ -1,5 +1,5 @@
 {
-  "seq": 7,
+  "seq": 11,
   "findings": [
     {
       "id": "F-0001",
@@ -55,11 +55,11 @@
       "id": "F-0006",
       "title": "Headless launch: orchestrator timeout killed session mid-Phase-4",
       "category": "ux",
-      "status": "open",
+      "status": "fixed",
       "detail": "Recovery via claude --continue + on-disk paper trail was near-zero cost. Fix candidate: launch hygiene section should suggest --output-format stream-json (or periodic progress markers) for long headless runs so the orchestrator sees liveness. Source: Run 2.",
       "phase": "execute",
       "createdAt": "2026-08-29T06:40:58.988Z",
-      "updatedAt": "2026-08-29T06:40:58.988Z"
+      "updatedAt": "2026-08-29T08:06:14.809Z"
     },
     {
       "id": "F-0007",
@@ -70,6 +70,46 @@
       "phase": "execute",
       "createdAt": "2026-08-29T07:28:45.820Z",
       "updatedAt": "2026-08-29T07:28:45.820Z"
+    },
+    {
+      "id": "F-0008",
+      "title": "[shipyard-cli] claude-md-dead-path false positives on prose slashes",
+      "category": "protocol",
+      "status": "open",
+      "detail": "and/or, 0/1/2 flagged as dead paths. Fixed via C5 veto: final slash-segment must contain a dot or token ends with /. Verified 56/56. Source: Run 3.",
+      "phase": "closeout",
+      "createdAt": "2026-08-29T08:05:53.155Z",
+      "updatedAt": "2026-08-29T08:05:53.155Z"
+    },
+    {
+      "id": "F-0009",
+      "title": "[shipyard-cli] claude-md-dead-path false positives on prose slashes",
+      "category": "protocol",
+      "status": "shipped",
+      "detail": "and/or, 0/1/2 flagged as dead paths. Fixed via C5 veto: final slash-segment must contain a dot or token ends with /. Verified 56/56. Source: Run 3.",
+      "phase": "closeout",
+      "createdAt": "2026-08-29T08:06:14.797Z",
+      "updatedAt": "2026-08-29T08:06:14.801Z"
+    },
+    {
+      "id": "F-0010",
+      "title": "[context-lint] data.md coordinate predicate self-flagged rule identifiers",
+      "category": "protocol",
+      "status": "shipped",
+      "detail": "Contains-/and-. predicate flagged context-md/entry-format etc. Fixed by C2 ruling: final slash-segment contains dot OR token ends with /. Verified 52/52. Source: Run 4.",
+      "phase": "spec",
+      "createdAt": "2026-08-29T08:06:14.802Z",
+      "updatedAt": "2026-08-29T08:06:14.805Z"
+    },
+    {
+      "id": "F-0011",
+      "title": "[drydock] no post-scaffold self-audit step",
+      "category": "protocol",
+      "status": "confirmed",
+      "detail": "Run 4 operator missed docs/business/ and git init — checklist exists but nothing forces a final audit. Fix candidate: drydock ends with self-audit (or runs sy check on itself). Source: Run 4.",
+      "phase": "drydock",
+      "createdAt": "2026-08-29T08:06:14.806Z",
+      "updatedAt": "2026-08-29T08:06:14.807Z"
     }
   ]
 }
