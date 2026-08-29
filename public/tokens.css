@@ -1,0 +1,261 @@
+/* =====================================================================
+   Shipyard Log — design tokens + 基础样式（唯一样式真源）
+   约定（design-system/tokens/README.md）：
+   - 全部令牌定义在 :root；组件样式只允许引用变量，禁止魔法色值/字号；
+   - 新增令牌先改本文件再用，禁止反向。
+   视觉基调：深色日志风——等宽正文、终端绿强调、暗红告警。
+   ===================================================================== */
+
+:root {
+  /* —— 色板 —— */
+  --color-bg: #0b1016;             /* 页面底色（终端黑） */
+  --color-surface: #131b24;        /* 卡片 / 表单面板 */
+  --color-surface-raised: #1b2634; /* 控件 / hover 面 */
+  --color-ink: #d6e1eb;            /* 主文字 */
+  --color-ink-muted: #8ea1b2;      /* 次要文字 */
+  --color-accent: #4bd07f;         /* 终端绿：主操作 / 正向状态 */
+  --color-accent-ink: #06170d;     /* accent 底上的文字 */
+  --color-accent-bg: #0f2c1d;      /* accent 弱底 */
+  --color-danger: #f07167;         /* 错误提示 / wontfix */
+  --color-danger-bg: #331714;      /* danger 弱底 */
+  --color-border: #263544;         /* 描边 */
+
+  /* —— 形状与节奏 —— */
+  --radius: 6px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 16px;
+  --space-4: 24px;
+
+  /* —— 字号 —— */
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-md: 13px;
+  --text-lg: 16px;
+  --text-xl: 21px;
+
+  /* —— 字体 —— */
+  --font-mono: ui-monospace, "Cascadia Code", "JetBrains Mono", Consolas, "Liberation Mono", "Courier New", monospace;
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+/* —— 基础 —— */
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: var(--space-3);
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-mono);
+  font-size: var(--text-md);
+  line-height: 1.6;
+}
+
+#app,
+.site-header { max-width: 880px; margin-left: auto; margin-right: auto; }
+
+.site-header { margin-bottom: var(--space-4); }
+.site-header h1 {
+  margin: 0;
+  color: var(--color-accent);
+  font-size: var(--text-xl);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.site-tagline {
+  margin: var(--space-1) 0 0;
+  color: var(--color-ink-muted);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+}
+
+/* —— 错误提示条 —— */
+.error-bar {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-danger-bg);
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius);
+}
+.error-bar strong { color: var(--color-danger); font-weight: 600; }
+.error-bar span { flex: 1; overflow-wrap: anywhere; }
+.error-bar button {
+  color: var(--color-danger);
+  background: var(--color-danger-bg);
+  border-color: var(--color-danger);
+}
+
+/* —— 过滤工具条 —— */
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+.field--filter select { min-width: 160px; }
+
+/* —— 字段 —— */
+.field { display: flex; flex-direction: column; gap: var(--space-1); }
+.field-label {
+  color: var(--color-ink-muted);
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+input,
+select,
+textarea {
+  font: inherit;
+  color: var(--color-ink);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: var(--space-1) var(--space-2);
+}
+textarea { resize: vertical; }
+::placeholder { color: var(--color-ink-muted); opacity: 0.7; }
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+button:focus-visible {
+  outline: 1px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+/* —— 新建表单 —— */
+.new-finding {
+  margin-bottom: var(--space-3);
+  padding: var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+}
+.field--wide { grid-column: 1 / -1; }
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--space-2);
+}
+
+/* —— 按钮 —— */
+button {
+  font: inherit;
+  font-size: var(--text-sm);
+  color: var(--color-ink);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: var(--space-1) var(--space-2);
+  cursor: pointer;
+}
+button:hover:not(:disabled) { border-color: var(--color-ink-muted); }
+button:disabled { color: var(--color-ink-muted); cursor: not-allowed; }
+
+.btn--primary {
+  color: var(--color-accent-ink);
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  font-weight: 600;
+}
+.btn--primary:hover:not(:disabled) { border-color: var(--color-accent-ink); }
+
+.btn--danger {
+  color: var(--color-danger);
+  background: var(--color-surface);
+  border-color: var(--color-danger);
+}
+
+/* —— finding 列表 —— */
+.finding-list { display: grid; gap: var(--space-2); }
+.finding {
+  margin: 0;
+  padding: var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+.finding-title {
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.finding-id { color: var(--color-accent); }
+.finding-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--color-ink-muted);
+  font-size: var(--text-sm);
+}
+.finding-detail {
+  margin: var(--space-2) 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.finding-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+/* —— 徽章 —— */
+.badge {
+  display: inline-block;
+  padding: 0 var(--space-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  font-size: var(--text-xs);
+  color: var(--color-ink-muted);
+}
+.status[data-status="confirmed"] {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+}
+.status[data-status="fixed"] {
+  color: var(--color-accent);
+  background: var(--color-accent-bg);
+  border-color: var(--color-accent);
+}
+.status[data-status="shipped"] {
+  color: var(--color-accent-ink);
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  font-weight: 600;
+}
+.status[data-status="wontfix"] {
+  color: var(--color-danger);
+  border-color: var(--color-danger);
+}
+
+/* —— 空状态 / 加载 —— */
+.empty {
+  margin: var(--space-4) 0;
+  padding: var(--space-4);
+  text-align: center;
+  color: var(--color-ink-muted);
+  font-family: var(--font-sans);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius);
+}
+.loading { color: var(--color-ink-muted); }
+
+@media (max-width: 560px) {
+  .form-grid { grid-template-columns: 1fr; }
+}
