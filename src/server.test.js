@@ -246,21 +246,64 @@ test('PATCH validates the transition target: bad enum or missing body → 400 VA
   );
 });
 
-test('unknown paths and unsupported methods return a JSON 404 (static files are the T3 slice)', async (t) => {
+test('unknown paths and unsupported methods return a JSON 404 (static assets only under public/)', async (t) => {
   const { base } = await startServer(t);
 
-  await assertErrorShape(await json(base, '/'), 404, 'NOT_FOUND');
   await assertErrorShape(await json(base, '/api/nope'), 404, 'NOT_FOUND');
+  await assertErrorShape(await json(base, '/no-such-asset.js'), 404, 'NOT_FOUND');
+  await assertErrorShape(await json(base, '/app.js/extra'), 404, 'NOT_FOUND');
   await assertErrorShape(await json(base, '/api/findings/F-0001'), 404, 'NOT_FOUND');
   await assertErrorShape(await json(base, '/api/findings', { method: 'DELETE' }), 404, 'NOT_FOUND');
   await assertErrorShape(await json(base, '/api/findings', { method: 'PATCH' }), 404, 'NOT_FOUND');
   await assertErrorShape(await json(base, '/api/stats', { method: 'POST' }), 404, 'NOT_FOUND');
   await assertErrorShape(await json(base, '/api/export.md', { method: 'POST' }), 404, 'NOT_FOUND');
   await assertErrorShape(
+    await json(base, '/tokens.css', { method: 'POST' }),
+    404,
+    'NOT_FOUND',
+  );
+  await assertErrorShape(
     await json(base, '/api/findings/F-0001/status', { method: 'POST', body: { to: 'confirmed' } }),
     404,
     'NOT_FOUND',
   );
+});
+
+test('GET / serves the UI shell and public assets with correct content types', async (t) => {
+  const { base } = await startServer(t);
+
+  const home = await fetch(base + '/');
+  assert.equal(home.status, 200);
+  assert.match(home.headers.get('content-type') ?? '', /^text\/html/);
+  const html = await home.text();
+  assert.match(html, /id="app"/);
+  assert.match(html, /href="\/tokens\.css"/);
+
+  const css = await fetch(base + '/tokens.css');
+  assert.equal(css.status, 200);
+  assert.match(css.headers.get('content-type') ?? '', /^text\/css/);
+  assert.ok((await css.text()).length > 0, 'tokens.css must not be empty');
+
+  const js = await fetch(base + '/app.js');
+  assert.equal(js.status, 200);
+  assert.match(js.headers.get('content-type') ?? '', /^text\/javascript/);
+  assert.ok((await js.text()).length > 0, 'app.js must not be empty');
+});
+
+test('static serving never escapes public/: traversal attempts fall through to JSON 404', async (t) => {
+  const { base } = await startServer(t);
+
+  // fetch normalizes the first two into /package.json; the encoded one reaches
+  // the server as-is and must be defused by the containment check itself.
+  for (const target of ['/../package.json', '/../../package.json', '/%2e%2e/package.json']) {
+    const res = await fetch(base + target);
+    assert.equal(res.status, 404, `${target} must not be served`);
+    assert.match(res.headers.get('content-type') ?? '', /application\/json/);
+  }
+  const listing = await json(base, '/..%2f..%2fpackage.json');
+  assertErrorShape(listing, 404, 'NOT_FOUND');
+  const body = await (await fetch(base + '/..%2f..%2fpackage.json')).text();
+  assert.doesNotMatch(body, /"name"/, 'package.json contents must never leak');
 });
 
 test('request bodies above the size limit are rejected with 400 VALIDATION', async (t) => {

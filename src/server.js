@@ -1,7 +1,7 @@
 // src/server.js — HTTP entry (node:http).
 // Per docs/standards/architecture.md this module only does route dispatch and HTTP
-// plumbing; business logic lives in src/handlers/, storage in src/store.js.
-// Static file serving for public/ is the T3 slice — unknown paths get a JSON 404.
+// plumbing; business logic lives in src/handlers/, storage in src/store.js, static
+// file serving for public/ in src/static.js. Unmatched paths get a JSON 404.
 
 import { createServer } from 'node:http';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -9,10 +9,12 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createStore } from './store.js';
 import { createFindingsHandlers, toErrorResponse } from './handlers/findings.js';
 import { createStatsHandlers } from './handlers/stats.js';
+import { createStaticHandler } from './static.js';
 
 const DEFAULT_PORT = 4100;
 const MAX_BODY_BYTES = 1024 * 1024; // ~1MB guard for JSON request bodies
 const DEFAULT_DATA_FILE = fileURLToPath(new URL('../data/findings.json', import.meta.url));
+const DEFAULT_PUBLIC_DIR = fileURLToPath(new URL('../public/', import.meta.url));
 
 const FINDINGS_ROUTE = '/api/findings';
 const TRANSITION_PATTERN = /^\/api\/findings\/([^/]+)\/status$/;
@@ -123,11 +125,19 @@ function sendRaw(res, status, body, headers) {
   res.end(payload);
 }
 
-async function handleRequest(req, res, handlers) {
+async function handleRequest(req, res, handlers, serveStatic) {
   try {
     const url = new URL(req.url ?? '/', 'http://localhost'); // base only to satisfy URL
     const route = matchRoute(req.method ?? 'GET', url.pathname);
     if (!route) {
+      // API miss → try the static surface (GET/HEAD only); anything else is a JSON 404.
+      if (req.method === 'GET' || req.method === 'HEAD') {
+        const file = await serveStatic(url.pathname);
+        if (file) {
+          sendRaw(res, file.status, file.body, file.headers);
+          return;
+        }
+      }
       sendJson(res, 404, {
         error: { code: 'NOT_FOUND', message: `no route for ${req.method} ${url.pathname}` },
       });
@@ -173,18 +183,25 @@ async function handleRequest(req, res, handlers) {
 /**
  * Factory: opens the store and starts listening. Resolves once the server accepts
  * connections. Options: `port` (0 → random, the testable default), `host`,
- * `dataFile` (defaults to the repo's data/findings.json).
+ * `dataFile` (defaults to the repo's data/findings.json), `publicDir` (defaults
+ * to the repo's public/).
  * Returns `{ server, store, port, close }`.
  */
-export async function start({ port = 0, host, dataFile = DEFAULT_DATA_FILE } = {}) {
+export async function start({
+  port = 0,
+  host,
+  dataFile = DEFAULT_DATA_FILE,
+  publicDir = DEFAULT_PUBLIC_DIR,
+} = {}) {
   const store = await createStore(dataFile);
   const handlers = {
     ...createFindingsHandlers(store),
     ...createStatsHandlers(store),
   };
+  const serveStatic = createStaticHandler(publicDir);
   const server = createServer((req, res) => {
     // handleRequest catches everything itself; this is belt and braces.
-    handleRequest(req, res, handlers).catch(() => res.destroy());
+    handleRequest(req, res, handlers, serveStatic).catch(() => res.destroy());
   });
   await new Promise((resolve, reject) => {
     server.once('error', reject);

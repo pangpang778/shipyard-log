@@ -9,4 +9,4 @@
 
 ## 提交流程
 - conventional commit；每个票一个分支合并（或直接 main 顺序提交，dogfood 期允许）
-- CI：暂无（零依赖项目，本地 `node --test` 即门禁；待票 T5 评估引入 GitHub Actions）
+- CI：GitHub Actions（`.github/workflows/ci.yml`）——push/PR 触发，Node 24 跑 `node --test`（零依赖项目，无安装步骤）

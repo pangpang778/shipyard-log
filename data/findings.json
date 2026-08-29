@@ -1,0 +1,45 @@
+{
+  "seq": 4,
+  "findings": [
+    {
+      "id": "F-0001",
+      "title": "Windows git CRLF warnings pollute drydock output (13 lines)",
+      "category": "missing",
+      "status": "confirmed",
+      "detail": "Fix candidate: add .gitattributes (* text=auto eol=lf) to drydock seed. Source: docs/dogfood/log.md Run#1",
+      "phase": "drydock",
+      "createdAt": "2026-08-29T06:03:51.526Z",
+      "updatedAt": "2026-08-29T06:03:51.530Z"
+    },
+    {
+      "id": "F-0002",
+      "title": "drydock suggests `omc doctor` but is not executable outside an OMC session",
+      "category": "protocol",
+      "status": "confirmed",
+      "detail": "Fix candidate: make OMC detection optional. Source: docs/dogfood/log.md Run#1",
+      "phase": "drydock",
+      "createdAt": "2026-08-29T06:03:51.533Z",
+      "updatedAt": "2026-08-29T06:03:51.536Z"
+    },
+    {
+      "id": "F-0003",
+      "title": "Solo dogfood: agent plays both human and agent roles, C1-C5 exercised with zero real-user friction cost",
+      "category": "ux",
+      "status": "wontfix",
+      "detail": "Evaluation limitation, not a skill defect — needs a real human rerun. Source: docs/dogfood/log.md Run#1",
+      "phase": "execute",
+      "createdAt": "2026-08-29T06:03:51.538Z",
+      "updatedAt": "2026-08-29T06:03:51.542Z"
+    },
+    {
+      "id": "F-0004",
+      "title": "launch lacks a brief-quality self-check list before Phase 1",
+      "category": "protocol",
+      "status": "confirmed",
+      "detail": "Fix candidate: add brief self-check (objective named? scope boundary named? non-goals?) to launch skill. Source: docs/dogfood/log.md Run#1",
+      "phase": "converge",
+      "createdAt": "2026-08-29T06:03:51.545Z",
+      "updatedAt": "2026-08-29T06:03:51.548Z"
+    }
+  ]
+}

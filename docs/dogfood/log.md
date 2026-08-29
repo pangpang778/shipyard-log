@@ -2,6 +2,8 @@
 
 > 本文件是 finding 应用的前身（应用可用前，findings 先记在这里；T2 完成后回填进应用）。
 > 格式：`[阶段] 观察 → 影响 → 候选修正`
+> **回填（T5）**：Run#1 的 4 条 finding 已录入应用（F-0001–F-0004，`scripts/seed-findings.mjs`），
+> 此后 finding 生命周期全部走应用本身（`npm start` → 记录/流转/导出）。
 
 ## Run #1（2026-08-29）
 
