@@ -1,15 +1,15 @@
 {
-  "seq": 6,
+  "seq": 7,
   "findings": [
     {
       "id": "F-0001",
       "title": "Windows git CRLF warnings pollute drydock output (13 lines)",
       "category": "missing",
-      "status": "fixed",
+      "status": "shipped",
       "detail": "Fix candidate: add .gitattributes (* text=auto eol=lf) to drydock seed. Source: docs/dogfood/log.md Run#1",
       "phase": "drydock",
       "createdAt": "2026-08-29T06:03:51.526Z",
-      "updatedAt": "2026-08-29T06:06:15.553Z"
+      "updatedAt": "2026-08-29T07:28:45.826Z"
     },
     {
       "id": "F-0002",
@@ -60,6 +60,16 @@
       "phase": "execute",
       "createdAt": "2026-08-29T06:40:58.988Z",
       "updatedAt": "2026-08-29T06:40:58.988Z"
+    },
+    {
+      "id": "F-0007",
+      "title": "sy check CJK false positive: spec/ticket-style prose flagged as dead path",
+      "category": "protocol",
+      "status": "open",
+      "detail": "[shipyard-cli] Tightened rule still flags tokens ending with / when followed by CJK chars (spec/ticket = prose, not a path). Fix candidate: exclude candidates whose next char is CJK. Source: Run 3 mirror-check on shipyard-log.",
+      "phase": "execute",
+      "createdAt": "2026-08-29T07:28:45.820Z",
+      "updatedAt": "2026-08-29T07:28:45.820Z"
     }
   ]
 }
