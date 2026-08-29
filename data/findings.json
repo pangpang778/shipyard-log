@@ -1,5 +1,5 @@
 {
-  "seq": 11,
+  "seq": 12,
   "findings": [
     {
       "id": "F-0001",
@@ -75,11 +75,11 @@
       "id": "F-0008",
       "title": "[shipyard-cli] claude-md-dead-path false positives on prose slashes",
       "category": "protocol",
-      "status": "open",
+      "status": "wontfix",
       "detail": "and/or, 0/1/2 flagged as dead paths. Fixed via C5 veto: final slash-segment must contain a dot or token ends with /. Verified 56/56. Source: Run 3.",
       "phase": "closeout",
       "createdAt": "2026-08-29T08:05:53.155Z",
-      "updatedAt": "2026-08-29T08:05:53.155Z"
+      "updatedAt": "2026-08-29T08:06:53.769Z"
     },
     {
       "id": "F-0009",
@@ -110,6 +110,16 @@
       "phase": "drydock",
       "createdAt": "2026-08-29T08:06:14.806Z",
       "updatedAt": "2026-08-29T08:06:14.807Z"
+    },
+    {
+      "id": "F-0012",
+      "title": "[process] non-idempotent backfill script created duplicate finding F-0008",
+      "category": "protocol",
+      "status": "confirmed",
+      "detail": "Orchestrator hand-script re-added an existing finding after a mid-script crash — the seed script has GET-title dedup but the hand script skipped it. Fix candidates: (a) always use idempotent seed pattern, (b) app gains detail-edit/dedupe. Source: Run 4 closeout.",
+      "phase": "closeout",
+      "createdAt": "2026-08-29T08:06:53.765Z",
+      "updatedAt": "2026-08-29T08:06:53.767Z"
     }
   ]
 }
