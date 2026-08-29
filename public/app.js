@@ -3,6 +3,8 @@
 //   GET   /api/findings?status=&category=&phase=  → {findings:[...]} 或裸数组（两种都兼容）
 //   POST  /api/findings            {title, category, phase, detail} → 201
 //   PATCH /api/findings/:id/status {to} → 200；失败 409/404 {error:{code,message}}
+//   GET   /api/stats              → {byStatus, byCategory, total}（五种枚举值全出现，0 也列出）
+//   GET   /api/export.md          → text/markdown 报告（生成时间 + 总数 + 统计表 + finding 明细）
 // 所有用户内容一律经 textContent 渲染，无 innerHTML，无外部依赖。
 
 const CATEGORIES = ["protocol", "missing", "naming", "docs", "ux"];
@@ -24,6 +26,8 @@ const EMPTY_HINT = "记录第一条 finding";
 const state = {
   filters: { status: "", category: "", phase: "" },
   findings: [],
+  stats: null, // { byStatus, byCategory, total }
+  statsError: false,
   loading: false,
   posting: false,
   error: null, // { message }
@@ -108,6 +112,19 @@ function setFilter(key, value) {
   loadFindings();
 }
 
+/** 统计失败不阻塞列表：面板降级为占位提示。 */
+async function loadStats() {
+  try {
+    const payload = await request("/api/stats");
+    state.stats = payload && typeof payload === "object" ? payload : null;
+    state.statsError = state.stats === null;
+  } catch {
+    state.stats = null;
+    state.statsError = true;
+  }
+  render();
+}
+
 async function createFinding(payload) {
   state.posting = true;
   render();
@@ -115,7 +132,7 @@ async function createFinding(payload) {
     await request("/api/findings", { method: "POST", body: payload });
     state.error = null;
     document.getElementById("new-finding")?.reset(); // 清空的是当前挂载的表单
-    await loadFindings();
+    await Promise.all([loadFindings(), loadStats()]);
   } catch (err) {
     state.error = { message: err.message };
   } finally {
@@ -131,7 +148,7 @@ async function transitionStatus(finding, to) {
       body: { to },
     });
     state.error = null;
-    await loadFindings();
+    await Promise.all([loadFindings(), loadStats()]);
   } catch (err) {
     state.error = { message: err.message };
     render();
@@ -398,12 +415,63 @@ function renderList() {
   return el("div", { class: "finding-list" }, findings.map(renderFinding));
 }
 
+function openExport() {
+  window.open("/api/export.md", "_blank", "noopener");
+}
+
+function statsGroup(label, values, field, statusColored) {
+  const by = state.stats?.[field] ?? {};
+  const chips = values.map((value) => {
+    const attrs = statusColored
+      ? { class: "badge status", "data-status": value }
+      : { class: "badge" };
+    return el("span", attrs, `${value} ${by[value] ?? 0}`);
+  });
+  return el(
+    "div",
+    { class: "stats-group" },
+    el("span", { class: "field-label" }, label),
+    el("div", { class: "stats-chips" }, chips),
+  );
+}
+
+/** 页面顶部统计面板（US4）+ Export Markdown 按钮（US5）。 */
+function renderStats() {
+  const head = el(
+    "div",
+    { class: "stats-head" },
+    el("h2", { class: "stats-title" }, "统计"),
+    state.stats ? el("span", { class: "stats-total" }, `共 ${state.stats.total ?? 0} 条`) : null,
+    el(
+      "button",
+      {
+        type: "button",
+        onclick: openExport,
+        title: "在新窗口打开 Markdown 报告（生成时间 + 统计表 + 全部 finding）",
+      },
+      "Export Markdown",
+    ),
+  );
+  const body = state.statsError
+    ? el("p", { class: "stats-hint" }, "统计暂不可用——稍后操作列表时会自动重试。")
+    : state.stats
+      ? el(
+          "div",
+          {},
+          statsGroup("status", STATUSES, "byStatus", true),
+          statsGroup("category", CATEGORIES, "byCategory", false),
+        )
+      : el("p", { class: "stats-hint" }, "loading…");
+  return el("section", { class: "stats-panel", "aria-label": "统计面板" }, head, body);
+}
+
 function render() {
   const root = document.getElementById("app");
   if (!root) return;
   const preserved = readFormValues();
   root.replaceChildren(
     state.error ? renderError() : null,
+    renderStats(),
     renderToolbar(),
     renderNewForm(preserved),
     renderList(),
@@ -414,3 +482,4 @@ function render() {
 
 render(); // module script 自带 defer，DOM 已就绪
 loadFindings();
+loadStats();

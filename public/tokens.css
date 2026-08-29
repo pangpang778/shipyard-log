@@ -98,6 +98,43 @@ body {
 }
 .field--filter select { min-width: 160px; }
 
+/* —— 统计面板 —— */
+.stats-panel {
+  margin-bottom: var(--space-3);
+  padding: var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+.stats-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+.stats-title {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: 600;
+}
+.stats-total { color: var(--color-ink-muted); font-size: var(--text-sm); }
+.stats-head button { margin-left: auto; }
+.stats-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+}
+.stats-chips { display: flex; flex-wrap: wrap; gap: var(--space-1); }
+.stats-hint {
+  margin: 0;
+  color: var(--color-ink-muted);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+}
+
 /* —— 字段 —— */
 .field { display: flex; flex-direction: column; gap: var(--space-1); }
 .field-label {

@@ -130,6 +130,26 @@ test('list rejects invalid filter values with VALIDATION', async (t) => {
   await rejectsWith(store.list(null), 'VALIDATION');
 });
 
+test('all returns every finding in insertion order (id ascending) and never leaks references', async (t) => {
+  const store = await tempStore(t);
+  assert.deepEqual(await store.all(), [], 'empty store → empty list');
+
+  await store.add({ title: 'A', category: 'protocol', phase: 'drydock' }); // F-0001
+  await store.add({ title: 'B', category: 'ux', phase: 'execute' }); // F-0002
+  await store.transition('F-0001', 'confirmed');
+
+  const all = await store.all();
+  assert.deepEqual(
+    all.map((f) => f.id),
+    ['F-0001', 'F-0002'],
+    'insertion order — unlike list(), which is newest first',
+  );
+  assert.equal(all[0].status, 'confirmed');
+
+  all[0].title = 'mutated';
+  assert.equal((await store.get('F-0001')).title, 'A', 'mutating a result must not touch the store');
+});
+
 test('transition walks the full happy path open → confirmed → fixed → shipped', async (t) => {
   const store = await tempStore(t);
 

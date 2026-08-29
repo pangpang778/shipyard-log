@@ -254,6 +254,8 @@ test('unknown paths and unsupported methods return a JSON 404 (static files are 
   await assertErrorShape(await json(base, '/api/findings/F-0001'), 404, 'NOT_FOUND');
   await assertErrorShape(await json(base, '/api/findings', { method: 'DELETE' }), 404, 'NOT_FOUND');
   await assertErrorShape(await json(base, '/api/findings', { method: 'PATCH' }), 404, 'NOT_FOUND');
+  await assertErrorShape(await json(base, '/api/stats', { method: 'POST' }), 404, 'NOT_FOUND');
+  await assertErrorShape(await json(base, '/api/export.md', { method: 'POST' }), 404, 'NOT_FOUND');
   await assertErrorShape(
     await json(base, '/api/findings/F-0001/status', { method: 'POST', body: { to: 'confirmed' } }),
     404,
@@ -292,4 +294,117 @@ test('state persists across a server restart on the same data file', async (t) =
   assert.equal(list.status, 200);
   assert.deepEqual(list.body.map((f) => f.id), [created.body.id]);
   assert.equal(list.body[0].status, 'confirmed');
+});
+
+test('GET /api/stats on an empty library returns zeroed counts for every status and category', async (t) => {
+  const { base } = await startServer(t);
+
+  const res = await json(base, '/api/stats');
+  assert.equal(res.status, 200);
+  assert.match(res.contentType ?? '', /application\/json/);
+  assert.deepEqual(res.body, {
+    byStatus: { open: 0, confirmed: 0, fixed: 0, shipped: 0, wontfix: 0 },
+    byCategory: { protocol: 0, missing: 0, naming: 0, docs: 0, ux: 0 },
+    total: 0,
+  });
+});
+
+test('GET /api/stats reflects creates and transitions and always lists every enum value', async (t) => {
+  const { base } = await startServer(t);
+
+  const a = await json(base, '/api/findings', {
+    method: 'POST',
+    body: { title: 'A', category: 'protocol', phase: 'drydock' },
+  });
+  await json(base, '/api/findings', {
+    method: 'POST',
+    body: { title: 'B', category: 'ux', phase: 'execute' },
+  });
+  const c = await json(base, '/api/findings', {
+    method: 'POST',
+    body: { title: 'C', category: 'docs', phase: 'spec' },
+  });
+  // mutate through the API itself (black-box seeding)
+  await json(base, `/api/findings/${a.body.id}/status`, { method: 'PATCH', body: { to: 'confirmed' } });
+  await json(base, `/api/findings/${c.body.id}/status`, { method: 'PATCH', body: { to: 'wontfix' } });
+
+  const res = await json(base, '/api/stats');
+  assert.equal(res.status, 200);
+  assert.deepEqual(res.body.byStatus, { open: 1, confirmed: 1, fixed: 0, shipped: 0, wontfix: 1 });
+  assert.deepEqual(res.body.byCategory, { protocol: 1, missing: 0, naming: 0, docs: 1, ux: 1 });
+  assert.equal(res.body.total, 3);
+  const statusSum = Object.values(res.body.byStatus).reduce((sum, n) => sum + n, 0);
+  assert.equal(statusSum, res.body.total, 'byStatus counts must sum to total');
+});
+
+test('GET /api/export.md returns a markdown report: header, stats tables, findings in id order', async (t) => {
+  const { base } = await startServer(t);
+
+  const a = await json(base, '/api/findings', {
+    method: 'POST',
+    body: { title: 'Checklist skips step X', category: 'protocol', phase: 'drydock' },
+  });
+  const b = await json(base, '/api/findings', {
+    method: 'POST',
+    body: { title: 'Confusing name', category: 'naming', phase: 'converge' },
+  });
+  await json(base, `/api/findings/${a.body.id}/status`, { method: 'PATCH', body: { to: 'confirmed' } });
+
+  const res = await fetch(base + '/api/export.md');
+  assert.equal(res.status, 200);
+  assert.match(res.headers.get('content-type') ?? '', /^text\/markdown/);
+  const md = await res.text();
+
+  // header: generation time (ISO-8601) + total
+  const generated = /Generated at: (\S+)/.exec(md);
+  assert.ok(generated, 'report must state its generation time');
+  assert.ok(!Number.isNaN(Date.parse(generated[1])), 'generation time must be ISO-8601');
+  assert.match(md, /Total findings: 2/);
+
+  // stats tables enumerate every enum value, zeros included
+  assert.match(md, /\| confirmed \| 1 \|/);
+  assert.match(md, /\| open \| 1 \|/);
+  assert.match(md, /\| shipped \| 0 \|/);
+  assert.match(md, /\| wontfix \| 0 \|/);
+  assert.match(md, /\| protocol \| 1 \|/);
+  assert.match(md, /\| naming \| 1 \|/);
+  assert.match(md, /\| ux \| 0 \|/);
+
+  // findings detail table with the six contracted columns
+  assert.match(md, /\| id \| title \| category \| phase \| status \| updatedAt \|/);
+  assert.match(
+    md,
+    new RegExp(
+      `\\| ${a.body.id} \\| Checklist skips step X \\| protocol \\| drydock \\| confirmed \\| \\S+ \\|`,
+    ),
+  );
+  assert.match(
+    md,
+    new RegExp(`\\| ${b.body.id} \\| Confusing name \\| naming \\| converge \\| open \\| \\S+ \\|`),
+  );
+  assert.ok(md.indexOf(a.body.id) < md.indexOf(b.body.id), 'findings must be ordered by id ascending');
+});
+
+test('GET /api/export.md on an empty library renders zeroed stats and an empty findings table', async (t) => {
+  const { base } = await startServer(t);
+
+  const res = await fetch(base + '/api/export.md');
+  assert.equal(res.status, 200);
+  const md = await res.text();
+  assert.match(md, /Total findings: 0/);
+  assert.match(md, /\| id \| title \| category \| phase \| status \| updatedAt \|/);
+  assert.doesNotMatch(md, /\| F-\d{4} /, 'no finding rows on an empty library');
+});
+
+test('GET /api/export.md escapes pipes and flattens newlines in titles so tables stay valid', async (t) => {
+  const { base } = await startServer(t);
+
+  await json(base, '/api/findings', {
+    method: 'POST',
+    body: { title: 'a | b\nc', category: 'docs', phase: 'spec' },
+  });
+
+  const res = await fetch(base + '/api/export.md');
+  const md = await res.text();
+  assert.ok(md.includes('a \\| b c'), `expected escaped/flattened title, got:\n${md}`);
 });

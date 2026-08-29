@@ -8,6 +8,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { createStore } from './store.js';
 import { createFindingsHandlers, toErrorResponse } from './handlers/findings.js';
+import { createStatsHandlers } from './handlers/stats.js';
 
 const DEFAULT_PORT = 4100;
 const MAX_BODY_BYTES = 1024 * 1024; // ~1MB guard for JSON request bodies
@@ -15,6 +16,8 @@ const DEFAULT_DATA_FILE = fileURLToPath(new URL('../data/findings.json', import.
 
 const FINDINGS_ROUTE = '/api/findings';
 const TRANSITION_PATTERN = /^\/api\/findings\/([^/]+)\/status$/;
+const STATS_ROUTE = '/api/stats';
+const EXPORT_ROUTE = '/api/export.md';
 
 /** Transport-level error (malformed/oversized request body); code maps to 400 VALIDATION. */
 class BodyError extends Error {
@@ -81,6 +84,14 @@ function matchRoute(method, pathname) {
     if (method === 'GET') return { name: 'list', needsBody: false };
     return null;
   }
+  if (pathname === STATS_ROUTE) {
+    if (method === 'GET') return { name: 'stats', needsBody: false };
+    return null;
+  }
+  if (pathname === EXPORT_ROUTE) {
+    if (method === 'GET') return { name: 'exportMarkdown', needsBody: false };
+    return null;
+  }
   const match = TRANSITION_PATTERN.exec(pathname);
   if (match && method === 'PATCH') {
     let id;
@@ -101,6 +112,14 @@ function sendJson(res, status, body) {
     'content-type': 'application/json; charset=utf-8',
     'content-length': Buffer.byteLength(payload),
   });
+  res.end(payload);
+}
+
+/** Raw (non-JSON) response for handlers that resolve with a `headers` map. */
+function sendRaw(res, status, body, headers) {
+  if (res.writableEnded || res.destroyed) return;
+  const payload = Buffer.from(body, 'utf8');
+  res.writeHead(status, { 'content-length': payload.byteLength, ...headers });
   res.end(payload);
 }
 
@@ -140,7 +159,11 @@ async function handleRequest(req, res, handlers) {
       body,
     };
     const result = await handlers[route.name](context);
-    sendJson(res, result.status, result.body);
+    if (result.headers !== undefined) {
+      sendRaw(res, result.status, result.body, result.headers);
+    } else {
+      sendJson(res, result.status, result.body);
+    }
   } catch (err) {
     const translated = toErrorResponse(err); // unknown failures → 500, never leaking internals
     sendJson(res, translated.status, translated.body);
@@ -155,7 +178,10 @@ async function handleRequest(req, res, handlers) {
  */
 export async function start({ port = 0, host, dataFile = DEFAULT_DATA_FILE } = {}) {
   const store = await createStore(dataFile);
-  const handlers = createFindingsHandlers(store);
+  const handlers = {
+    ...createFindingsHandlers(store),
+    ...createStatsHandlers(store),
+  };
   const server = createServer((req, res) => {
     // handleRequest catches everything itself; this is belt and braces.
     handleRequest(req, res, handlers).catch(() => res.destroy());

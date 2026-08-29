@@ -153,6 +153,14 @@ class Store {
     return matches.slice().reverse().map(snapshot);
   }
 
+  /**
+   * All findings in insertion order (id ascending) — the full-export view.
+   * Unlike list(), no filtering and no newest-first reversal; returns snapshots.
+   */
+  async all() {
+    return this.#db.findings.map(snapshot);
+  }
+
   /** Single finding by id, or NOT_FOUND. */
   async get(id) {
     const finding = this.#db.findings.find((f) => f.id === id);
