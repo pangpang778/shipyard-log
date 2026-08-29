@@ -1,5 +1,5 @@
 {
-  "seq": 12,
+  "seq": 14,
   "findings": [
     {
       "id": "F-0001",
@@ -15,11 +15,11 @@
       "id": "F-0002",
       "title": "drydock suggests `omc doctor` but is not executable outside an OMC session",
       "category": "protocol",
-      "status": "fixed",
+      "status": "shipped",
       "detail": "Fix candidate: make OMC detection optional. Source: docs/dogfood/log.md Run#1",
       "phase": "drydock",
       "createdAt": "2026-08-29T06:03:51.533Z",
-      "updatedAt": "2026-08-29T06:06:15.554Z"
+      "updatedAt": "2026-08-29T12:51:12.629Z"
     },
     {
       "id": "F-0003",
@@ -120,6 +120,26 @@
       "phase": "closeout",
       "createdAt": "2026-08-29T08:06:53.765Z",
       "updatedAt": "2026-08-29T08:06:53.767Z"
+    },
+    {
+      "id": "F-0013",
+      "title": "[process] combined C2+C3 checkpoint with pre-approved seams halves rounds, zero quality loss",
+      "category": "protocol",
+      "status": "fixed",
+      "detail": "Validated across 6 feature PRs: pre-listing seams in the brief + combined checkpoint cut orchestrator rounds from 3 to 2 per feature. Source: 6-feature campaign.",
+      "phase": "closeout",
+      "createdAt": "2026-08-29T12:51:12.623Z",
+      "updatedAt": "2026-08-29T12:51:12.627Z"
+    },
+    {
+      "id": "F-0014",
+      "title": "[infra] gateway single-account pool cannot sustain 2 concurrent claude sessions",
+      "category": "protocol",
+      "status": "confirmed",
+      "detail": "429/503 No-available-accounts when running two claude -p in parallel via Sub2API gateway (127.0.0.1:8090). Fix candidate: pool capacity upgrade, or serialize by design (adopted). Source: 6-feature campaign.",
+      "phase": "execute",
+      "createdAt": "2026-08-29T12:51:12.628Z",
+      "updatedAt": "2026-08-29T12:51:12.629Z"
     }
   ]
 }
